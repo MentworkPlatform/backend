@@ -8,10 +8,12 @@
   "scripts": {
     "start": "ts-node src/app.ts",
     "dev": "nodemon --exec ts-node src/app.ts",
+    "test": "nodemon --exec ts-node test/test.js",
     "build": "tsc"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
+    "axios": "^1.6.7",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "pg": "^8.14.0"
