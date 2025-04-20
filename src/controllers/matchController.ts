@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
-import { triggerMatchingWebhook } from '../services/n8nService';
+import { triggerMatchingWebhook, triggerNewConnectionWebhook } from '../services/n8nService';
 
 export const findMatches = async (req: Request, res: Response): Promise<void> => {
   const { name, email, goals } = req.body;
@@ -14,20 +14,63 @@ export const findMatches = async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
-    // Use the n8n service to trigger the matching webhook
+    try {
+      const checkResponse = await axios.get(`http://localhost:3050/mentees/email/${email}`);
+      if (checkResponse.data.success) {
+        res.status(409).json({
+          success: false,
+          error: 'A mentee with this email already exists'
+        });
+        return;
+      }
+    } catch (checkError: any) {
+      if (checkError.response && checkError.response.status !== 404) {
+        throw checkError;
+      }
+    }
+
     const result = await triggerMatchingWebhook({
       name,
       email,
       goals
     });
 
-    // Return the matches from n8n
+    if (result.error) {
+      res.status(result.status || 400).json({
+        success: false,
+        error: result.error
+      });
+      return;
+    }
+
+    if (!result.matches || result.matches.length === 0) {
+      res.status(200).json({
+        success: true,
+        message: 'No matching mentors found',
+        matches: []
+      });
+      return;
+    }
+
     res.status(200).json({
       success: true,
       message: 'Matching process completed',
       matches: result.matches || []
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.response && error.response.data) {
+      const errorMessage = error.response.data.error || '';
+      
+      if (errorMessage.includes('duplicate key') || 
+          errorMessage.includes('already exists')) {
+        res.status(409).json({
+          success: false,
+          error: 'A mentee with this email already exists'
+        });
+        return;
+      }
+    }
+
     res.status(500).json({
       success: false,
       error: 'Failed to find matching mentors'
@@ -35,57 +78,51 @@ export const findMatches = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const createMenteeWithConnection = async (req: Request, res: Response): Promise<void> => {
-  const { 
-    mentee_name, 
-    mentee_email, 
-    mentee_goals, 
-    selected_mentor_id 
-  } = req.body;
+export const createConnection = async (req: Request, res: Response): Promise<void> => {
+  let mentee_id, selected_mentor_id;
+  
+  if (Array.isArray(req.body)) {
+    if (req.body[0]) {
+      mentee_id = req.body[0].mentee_id;
+      selected_mentor_id = req.body[0].selected_mentor_id;
+    }
+  } else {
+    mentee_id = req.body.mentee_id;
+    selected_mentor_id = req.body.selected_mentor_id;
+  }
+  
+  console.log("Extracted IDs:", mentee_id, selected_mentor_id);
+  console.log("Original body:", req.body);
 
-  if (!mentee_name || !mentee_email || !selected_mentor_id) {
+  if (!mentee_id || !selected_mentor_id) {
     res.status(400).json({
       success: false,
-      error: 'Mentee details and selected mentor are required'
+      error: 'Mentee and selected mentor are required'
     });
     return;
   }
 
   try {
-    // 1. Create the mentee
-    const menteeResponse = await axios.post('http://localhost:3000/mentees/register', {
-      name: mentee_name,
-      email: mentee_email,
-      goals: mentee_goals || ''
-    });
+    const connectionResult = await triggerNewConnectionWebhook(mentee_id, selected_mentor_id);
 
-    if (!menteeResponse.data.success) {
-      throw new Error('Failed to create mentee');
-    }
-
-    const menteeId = menteeResponse.data.mentee.id;
-
-    // 2. Create the connection
-    const connectionResponse = await axios.post('http://localhost:3000/connections', {
-      mentor_id: selected_mentor_id,
-      mentee_id: menteeId
-    });
-
-    if (!connectionResponse.data.success) {
-      throw new Error('Failed to create connection');
+    if (connectionResult.error) {
+      res.status(connectionResult.status || 400).json({
+        success: false,
+        error: connectionResult.error
+      });
+      return;
     }
 
     res.status(201).json({
       success: true,
-      message: 'Mentee created and connected with mentor successfully',
-      mentee: menteeResponse.data.mentee,
-      connection: connectionResponse.data.connection
+      message: 'Mentee connected with mentor successfully',
+      connection: connectionResult.connection || connectionResult
     });
   } catch (error) {
-    console.error('Error creating mentee with connection:', error);
+    console.error('Error in createConnection:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to create mentee and connection'
+      error: 'Failed to create connection'
     });
   }
 };

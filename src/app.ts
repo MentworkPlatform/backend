@@ -1,12 +1,16 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import pool from './db';
 import routes from './routes';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3050;
 
 dotenv.config();
+
+app.use(cors());
+
 app.use(express.json());
 
 pool.connect()

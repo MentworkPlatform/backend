@@ -89,6 +89,34 @@ export const getMenteeByEmail = async (req: Request, res: Response): Promise<voi
   }
 };
 
+export const getMenteeById = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id;
+  
+  try {
+    const query = 'SELECT * FROM mentees WHERE id = $1';
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        error: 'Mentee not found'
+      });
+      return;
+    }
+    
+    res.status(200).json({
+      success: true,
+      mentee: result.rows[0]
+    });
+  } catch (error: unknown) {
+    console.error('Error fetching mentee by ID:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+};
+
 export const getAllMentees = async (req: Request, res: Response): Promise<void> => {
   try {
     const query = 'SELECT * FROM mentees ORDER BY name ASC';

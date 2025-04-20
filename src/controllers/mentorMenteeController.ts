@@ -15,7 +15,7 @@ export const createConnection = async (req: Request, res: Response): Promise<voi
 
   try {
     // Check if mentor exists
-    const mentorQuery = 'SELECT id FROM mentors WHERE id = $1';
+    const mentorQuery = 'SELECT id, name, email FROM mentors WHERE id = $1';
     const mentorResult = await pool.query(mentorQuery, [mentor_id]);
     
     if (mentorResult.rows.length === 0) {
@@ -27,7 +27,7 @@ export const createConnection = async (req: Request, res: Response): Promise<voi
     }
 
     // Check if mentee exists
-    const menteeQuery = 'SELECT id FROM mentees WHERE id = $1';
+    const menteeQuery = 'SELECT id, name, email FROM mentees WHERE id = $1';
     const menteeResult = await pool.query(menteeQuery, [mentee_id]);
     
     if (menteeResult.rows.length === 0) {
@@ -63,20 +63,15 @@ export const createConnection = async (req: Request, res: Response): Promise<voi
     const result = await pool.query(query, [mentor_id, mentee_id]);
     
     const newConnection = result.rows[0];
-    
-    // Get mentor and mentee details for the webhook
-    const mentorDetailsQuery = 'SELECT name, email FROM mentors WHERE id = $1';
-    const mentorDetails = await pool.query(mentorDetailsQuery, [mentor_id]);
-    
-    const menteeDetailsQuery = 'SELECT name, email FROM mentees WHERE id = $1';
-    const menteeDetails = await pool.query(menteeDetailsQuery, [mentee_id]);
-    
+
     // Trigger n8n webhook for new connection
-    await triggerNewConnectionWebhook(
-      newConnection,
-      mentorDetails.rows[0],
-      menteeDetails.rows[0]
-    );
+    const webhookResult = await triggerNewConnectionWebhook(mentee_id, mentor_id);
+    
+    // Check if there was an error with the webhook
+    if (webhookResult && webhookResult.error) {
+      console.warn('Webhook warning:', webhookResult.error);
+      // Continue anyway since the DB operation succeeded
+    }
 
     res.status(201).json({
       success: true,

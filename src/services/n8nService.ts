@@ -11,7 +11,6 @@ const WEBHOOKS = {
   MATCHING: process.env.N8N_MATCHING_WEBHOOK || 'http://localhost:5678/webhook/mentee-matching',
 };
 
-// Generic function to trigger any webhook
 const triggerWebhook = async (webhookUrl: string, data: any): Promise<void> => {
   try {
     await axios.post(webhookUrl, data);
@@ -21,7 +20,6 @@ const triggerWebhook = async (webhookUrl: string, data: any): Promise<void> => {
   }
 };
 
-// Specific webhook trigger functions
 export const triggerNewMentorWebhook = async (mentorData: any): Promise<void> => {
   await triggerWebhook(WEBHOOKS.NEW_MENTOR, mentorData);
 };
@@ -34,21 +32,26 @@ export const triggerNewProgramWebhook = async (programData: any): Promise<void> 
   await triggerWebhook(WEBHOOKS.NEW_PROGRAM, programData);
 };
 
-export const triggerNewConnectionWebhook = async (connectionData: any, mentorData: any, menteeData: any): Promise<void> => {
-  await triggerWebhook(WEBHOOKS.NEW_CONNECTION, {
-    connection: connectionData,
-    mentor: mentorData,
-    mentee: menteeData
-  });
+export const triggerNewConnectionWebhook = async (mentee_id: any, selected_mentor_id: any): Promise<any> => {
+  try {
+    const response = await axios.post(WEBHOOKS.NEW_CONNECTION, {
+      mentee_id: mentee_id,
+      selected_mentor_id: selected_mentor_id
+    });
+    return response.data;
+  } catch (error: any) {
+    return {
+      error: error.response?.data?.error || 'Failed to create connection',
+      status: error.response?.status || 500
+    };
+  }
 };
 
 export const triggerMatchingWebhook = async (menteeData: any): Promise<any> => {
   try {
     const response = await axios.post(WEBHOOKS.MATCHING, menteeData);
-    console.log(`Matching webhook triggered: ${WEBHOOKS.MATCHING}`);
     return response.data;
   } catch (error) {
-    console.error(`Error triggering matching webhook:`, error);
     return { matches: [] };
   }
 };
